@@ -1,0 +1,196 @@
+Project Bridgewater_Options_Sys {
+  database_type: 'PostgreSQL'
+  Note: 'Bitemporal systematic US equity & option data model.'
+}
+
+Table Security {
+  Security_ID int [pk, note: "Underlying security identifier."]
+  CUSIP varchar [note: "First 8 digits of the current CUSIP."]
+  Ticker varchar [note: "Current ticker symbol base."]
+  SIC varchar [note: "SIC code."]
+  Index_Flag boolean [note: "Indicates whether the security is an index. (0/1)"]
+  Exchange_Flags varchar [note: "Encoded exchange or listing flags."]
+  Class varchar [note: "Security class designator, if any."]
+  Issue_Type varchar [note: "Type of security (e.g., CS, ETF, ADR)."]
+  Industry_Group varchar [note: "3-digit Morningstar industry-group classification. Stored as string to survive taxonomy changes."]
+
+  Records {
+    10001001, '03783310', 'TSLA', '3571', false, 'Q', 'A', 'CS', '311'
+    10002002, '30303030', 'META', '7370', false, 'Q', 'A', 'CS', '311'
+    10003003, '11111111', 'ACQ',  '1111', false, 'Q', 'A', 'CS', '311'
+    10004004, '22222222', 'BUY',  '1111', false, 'Q', 'A', 'CS', '311'
+  }
+}
+
+Table Security_Name {
+  Security_ID int [pk, note: "Underlying security identifier."]
+  Date date [pk, note: "Effective date of the change."]
+  CUSIP varchar [note: "First 8 digits of the CUSIP as of that date."]
+  Ticker varchar [note: "Ticker base as of that date."]
+  Class varchar [note: "Class designator as of that date."]
+  Issuer_Description varchar [note: "Description of the issuing company or entity."]
+  Issue_Description varchar [note: "Description of the issue."]
+  SIC varchar [note: "SIC code as of that date."]
+  System_Time timestamp [pk, note: "Bitemporal audit column."]
+
+  Records {
+    10002002, '2021-10-28', '30303030', 'FB', 'A', 'FACEBOOK INC', 'COM', '7370', '2012-05-18 00:00:00'
+    10002002, '2022-06-09', '30303030', 'META', 'A', 'META PLATFORMS', 'COM', '7370', '2022-06-09 16:30:00'
+  }
+}
+
+Table Exchange {
+  Security_ID int [pk, note: "Underlying security identifier."]
+  Date date [pk, note: "Effective date of the exchange change."]
+  Sequence_Number int [pk, note: "Distinguishes multiple exchange events on the same date."]
+  Status varchar [note: "Status or event code (listed, delisted, suspended)."]
+  Exchange varchar [note: "Exchange added or deleted."]
+  Add_Delete_Indicator varchar [note: "Shows whether the exchange was added (A) or removed (D)."]
+  Exchange_Flags varchar [note: "Primary exchange after the change."]
+  System_Time timestamp [pk, note: "Bitemporal audit column."]
+
+  Records {
+    10003003, '2023-11-01', 1, 'D', 'Q', 'D', 'Q', '2023-11-01 16:30:00'
+    10001001, '2010-06-29', 1, 'A', 'Q', 'A', 'Q', '2010-06-29 16:30:00'
+  }
+}
+
+Table Distribution {
+  Security_ID int [pk, note: "Underlying security identifier."]
+  Record_Date date [pk, note: "Record date for the distribution."]
+  Sequence_Number int [pk, note: "Distinguishes multiple distributions with the same record date."]
+  Ex_Date date [note: "Date the security begins trading without the value of the next distribution."]
+  Amount numeric [note: "Cash amount if announced; yield if the dividend is projected."]
+  Adjustment_Factor numeric [note: "Adjustment used to compare pre- and post-distribution prices."]
+  Declare_Date date [note: "Declaration date, when information becomes public."]
+  Payment_Date date [note: "Payment date."]
+  Link_Security_ID int [note: "ID of an acquiring company or spun-off security when relevant."]
+  Distribution_Type int [note: "Enum: e.g. 1=Cash, 2=Split, 3=Merger."]
+  Frequency varchar [note: "Dividend-payment frequency."]
+  Currency varchar [note: "ISO currency code. Homogeneous USD assumption for strictly US-listed dataset."]
+  Approximate_Flag boolean [note: "Crucial for flagging unfinalized Mutual Fund ETF capital gains distributions."]
+  Cancel_Flag boolean [note: "If True, System_Time marks when the cancellation was known."]
+  Liquidation_Flag boolean [note: "True if liquidating (cascades to delisting)."]
+  System_Time timestamp [pk, note: "Bitemporal audit column."]
+
+  Records {
+    10002002, '2023-08-14', 1, '2023-08-11', 0.24, 1.0, '2023-08-03', '2023-08-17', NULL, 1, 'Q', 'USD', false, false, false, '2023-08-03 16:30:00'
+    10002002, '2023-08-14', 1, '2023-08-11', 0.26, 1.0, '2023-08-03', '2023-08-17', NULL, 1, 'Q', 'USD', false, false, false, '2023-08-05 16:30:00'
+    10001001, '2022-08-17', 1, '2022-08-25', 0, 3.0, '2022-08-05', '2022-08-24', NULL, 2, 'S', 'USD', false, false, false, '2022-08-05 16:30:00'
+    10003003, '2023-11-01', 1, '2023-11-01', 0, 1.0, '2023-10-01', '2023-11-01', 10004004, 3, 'O', 'USD', false, false, true, '2023-10-01 16:30:00'
+  }
+}
+
+Table Security_Price {
+  Security_ID int [pk, note: "Underlying security identifier."]
+  Date date [pk, note: "Date of the price record."]
+  Bid_Low numeric [note: "If positive, low price; if negative, closing bid when there was no trading."]
+  Ask_High numeric [note: "If positive, high price; if negative, closing ask when there was no trading."]
+  Close_Price numeric [note: "Closing price; if negative, average of closing bid and ask."]
+  Volume bigint [note: "Sum of volume across exchanges. BigInt to support ETF massive volumes."]
+  Total_Return numeric [note: "Holding-period return from the last good pricing date."]
+  Adjustment_Factor numeric [note: "Cumulative split-style adjustment factor."]
+  Open_Price numeric [note: "Opening price, or 0 if unavailable."]
+  Shares_Outstanding bigint [note: "Public shares outstanding."]
+  Adjustment_Factor2 numeric [note: "Cumulative total-return factor, including dividends and spin-offs."]
+  System_Time timestamp [pk, note: "Bitemporal audit column."]
+
+  Records {
+    10001001, '2022-08-24', 890.0, 895.0, 891.29, 1000000, 0.01, 1.0, 890.0, 1000000, 1.0, '2022-08-24 16:30:00'
+    10001001, '2022-08-25', 296.0, 298.0, 297.10, 3000000, 0.0, 3.0, 296.0, 3000000, 3.0, '2022-08-25 16:30:00'
+  }
+}
+
+Table Option_Contract {
+  Option_ID bigint [pk, note: "Unique identifier for the option contract."]
+  Security_ID int [note: "Underlying security identifier."]
+  Symbol varchar [note: "Option OSI notation symbol."]
+  Symbol_Flag int [note: "Indicates old notation versus OSI notation."]
+  Strike int [note: "Strike price multiplied by 1000. Hard integer avoids FP errors."]
+  Expiration date [note: "Expiration date of the contract."]
+  Call_Put varchar [note: "Call (C) or put (P)."]
+  ContractSize int [note: "Deliverable quantity, usually 100."]
+  AMSettlement int [note: "0 = PM settlement (close), 1 = AM settlement (open)."]
+  ExpiryIndicator varchar [note: "Regular, weekly, daily, end-of-month, or unknown."]
+  System_Time timestamp [pk, note: "Bitemporal audit column."]
+
+  Records {
+    990011, 10001001, 'TSLA 220916C00900000', 1, 900000, '2022-09-16', 'C', 100, 0, 'Regular', '2022-01-01 00:00:00'
+    990012, 10001001, 'TSLA 220916C00300000', 1, 300000, '2022-09-16', 'C', 300, 0, 'Regular', '2022-08-25 00:00:00'
+    990013, 10003003, 'ACQ 231215C00100000', 1, 100000, '2023-12-15', 'C', 100, 0, 'Regular', '2023-01-01 00:00:00'
+  }
+}
+
+Table Option_Info {
+  Security_ID int [pk, note: "Underlying security identifier."]
+  Dividend_Convention varchar [note: "How dividends are incorporated into option calculations."]
+  Exercise_Style varchar [note: "Exercise style, such as American or European."]
+  System_Time timestamp [pk, note: "Bitemporal audit column."]
+
+  Records {
+    10001001, 'D', 'A', '2020-01-01 00:00:00'
+    10002002, 'D', 'A', '2020-01-01 00:00:00'
+  }
+}
+
+Table Option_Price {
+  Option_ID bigint [pk, note: "Unique identifier for the option contract."]
+  Date date [pk, note: "Observation date."]
+  Best_Bid numeric [note: "Highest bid across exchanges."]
+  Best_Offer numeric [note: "Lowest ask across exchanges."]
+  Last_Trade_Date date [note: "Date the contract last traded."]
+  Volume bigint [note: "Total contract volume. Exists even if 0 for EOD Quotes."]
+  Open_Interest bigint [note: "Contracts outstanding."]
+  Special_Settlement int [note: "Settlement or expiration special-case indicator."]
+  Implied_Volatility numeric [note: "Calculated implied volatility when available."]
+  Delta numeric [note: "Option delta."]
+  Gamma numeric [note: "Option gamma."]
+  Vega numeric [note: "Option vega."]
+  Theta numeric [note: "Option theta."]
+  Adjustment_Factor numeric [note: "Cumulative adjustment factor for the option."]
+  System_Time timestamp [pk, note: "Bitemporal audit column."]
+
+  Records {
+    990011, '2022-08-24', 14.5, 15.0, '2022-08-24', 500, 10000, 0, 0.45, 0.4, 0.05, 0.1, -0.02, 1.0, '2022-08-24 16:30:00'
+    990012, '2022-08-25', 4.8, 5.0, '2022-08-25', 1500, 10000, 0, 0.45, 0.4, 0.05, 0.1, -0.02, 3.0, '2022-08-25 16:30:00'
+    990013, '2023-11-02', 2.0, 2.2, '2023-11-02', 0, 500, 1, 0.3, 0.5, 0.05, 0.1, -0.01, 1.0, '2023-11-02 16:30:00'
+  }
+}
+
+Table Forward_Price {
+  Security_ID int [pk, note: "Underlying security identifier."]
+  Date date [pk, note: "Date of the record."]
+  Expiration date [pk, note: "Option expiration date."]
+  Forward_Price numeric [note: "Forward price of one share of the underlying on the expiration date."]
+  System_Time timestamp [pk, note: "Bitemporal audit column."]
+
+  Records {
+    10001001, '2022-08-24', '2022-09-16', 892.5, '2022-08-24 16:30:00'
+  }
+}
+
+Table Zero_Curve {
+  Date date [pk, note: "Date of the zero curve."]
+  Days int [pk, note: "Days to maturity."]
+  Expiration_Date date [note: "Pre-computed date derived from Date + Days. Eradicates JOIN computation math."]
+  Rate numeric [note: "Continuously compounded zero-coupon rate."]
+  System_Time timestamp [pk, note: "Bitemporal audit column."]
+
+  Records {
+    '2022-08-24', 23, '2022-09-16', 0.035, '2022-08-24 16:30:00'
+  }
+}
+
+// ==========================================
+// DBML explicit Foreign Key relationships
+// ==========================================
+
+Ref: Security_Name.Security_ID > Security.Security_ID
+Ref: Exchange.Security_ID > Security.Security_ID
+Ref: Distribution.Security_ID > Security.Security_ID
+Ref: Distribution.Link_Security_ID > Security.Security_ID
+Ref: Security_Price.Security_ID > Security.Security_ID
+Ref: Option_Info.Security_ID > Security.Security_ID
+Ref: Option_Contract.Security_ID > Security.Security_ID
+Ref: Option_Price.Option_ID > Option_Contract.Option_ID
+Ref: Forward_Price.Security_ID > Security.Security_ID
