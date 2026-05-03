@@ -3,7 +3,7 @@ import random
 from datetime import datetime, timedelta
 
 def build_db():
-    conn = sqlite3.connect('mock_universe.db')
+    conn = sqlite3.connect('mock_dataset.db')
     c = conn.cursor()
 
     # 1. Security
@@ -19,7 +19,7 @@ def build_db():
     # 6. Option_Info
     c.execute('''CREATE TABLE Option_Info (s_id INTEGER, dividend_convention TEXT, exercise_style TEXT, system_time TIMESTAMP)''')
     # 7. Option_Contract
-    c.execute('''CREATE TABLE Option_Contract (option_id INTEGER PRIMARY KEY, s_id INTEGER, symbol TEXT, symbol_flag INTEGER, strike INTEGER, expiration DATE, call_put TEXT, contractsize INTEGER, expiryindicator TEXT, system_time TIMESTAMP)''')
+    c.execute('''CREATE TABLE Option_Contract (option_id INTEGER PRIMARY KEY, s_id INTEGER, symbol TEXT, symbol_flag INTEGER, strike INTEGER, expiration DATE, call_put TEXT, contractsize INTEGER, amsettlement INTEGER, expiryindicator TEXT, system_time TIMESTAMP)''')
     # 8. Option_Price
     c.execute('''CREATE TABLE Option_Price (option_id INTEGER, date DATE, best_bid REAL, best_offer REAL, last_trade_date DATE, volume INTEGER, open_interest INTEGER, special_settlement INTEGER, implied_volatility REAL, delta REAL, gamma REAL, vega REAL, theta REAL, adjustment_factor REAL, system_time TIMESTAMP)''')
     # 9. Forward_Price
@@ -119,8 +119,8 @@ def build_db():
         for strk in [140, 150, 160]: 
             opt_id_counter += 1
             exp_d = (start_date + timedelta(days=120)).strftime('%Y-%m-%d')
-            c.execute("INSERT INTO Option_Contract VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", 
-                     (opt_id_counter, s_id, f'{t} 230616C00150', 1, strk*1000, exp_d, 'CALL', 100, 'MONTHLY', dates[0] + ' 16:30'))
+            c.execute("INSERT INTO Option_Contract VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", 
+                     (opt_id_counter, s_id, f'{t} 230616C00150', 1, strk*1000, exp_d, 'CALL', 100, 0, 'MONTHLY', dates[0] + ' 16:30'))
             
             for date in dates:
                 dt = datetime.strptime(date, '%Y-%m-%d')
@@ -144,16 +144,16 @@ def build_db():
                         size = 600
                         st_time = '2023-02-27 16:30'
                         if date == '2023-02-27':
-                            c.execute("INSERT INTO Option_Contract VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", 
-                                     (active_opt_id, s_id, f'META2 230616C00083', 3, int(strk*1000/6.0), exp_d, 'CALL', size, 'MONTHLY', st_time))
+                            c.execute("INSERT INTO Option_Contract VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", 
+                                     (active_opt_id, s_id, f'META2 230616C00083', 3, int(strk*1000/6.0), exp_d, 'CALL', size, 0, 'MONTHLY', st_time))
                     elif date >= '2023-02-20':
                         active_opt_id = opt_id_counter + 3000 # 1st generation
                         adj = 2.0
                         size = 200
                         st_time = '2023-02-20 16:30'
                         if date == '2023-02-20':
-                            c.execute("INSERT INTO Option_Contract VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", 
-                                     (active_opt_id, s_id, f'META1 230616C00125', 2, int(strk*1000/2.0), exp_d, 'CALL', size, 'MONTHLY', st_time))
+                            c.execute("INSERT INTO Option_Contract VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", 
+                                     (active_opt_id, s_id, f'META1 230616C00125', 2, int(strk*1000/2.0), exp_d, 'CALL', size, 0, 'MONTHLY', st_time))
                 
                 if s_id == 10001005:
                     if date >= '2023-02-23' and date < '2023-02-28':

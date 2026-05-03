@@ -4,14 +4,14 @@
 A special dividend is declared on T. On T+2, the exchange corrects the yield. How does the model prevent an algorithm simulating T+1 from seeing the T+2 correction?
 
 **Adjustment**: 
-See original example in [[### A. Bitemporal Data Model (`System_Time`)]]
+See original example in [A. Bitemporal Data Model (`System_Time`)](../README.md#a-bitemporal-data-model-system_time)
 
 ### Mergers
 **Case:**
 Company A is acquired by Company B. How does the model ensure Company A's legacy orphaned options correctly price themselves using Company B's underlying price?
 
 **Implementation**
-- `Distribution` table adds new "Merger" event for Company A with `Link_Security_ID = CompanyB 
+- `Distribution` table adds new "Merger" event for Company A with `Link_Security_ID = CompanyB` 
 - `Option_Price.Special_Settlement = 1` for Company A moving forward
 - When querying for Company A, if `Option_Price.Special_Settlement = 1`, join in `Link_Security_ID` and get Company B's prices instead.
 

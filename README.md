@@ -4,10 +4,12 @@ Contents:
 1. [Business case background](#1-business-case-background)
 2. [Core Data Model](#2-core-data-model)
 3. [Major model decisions](#3-major-model-decisions)
-4. [Assumptions and Citations](#4-assumptions-and-citations)
-5. [Edge case adjustments](#5-edge-case-adjustments)
-6. [Sample Datasets and Joins](#6-sample-datasets-and-joins)
-7. [The Consumption Layer (Abstracted Views & Generated Tables)](#7-the-consumption-layer-abstracted-views--generated-tables)
+4. [Assumptions](#4-assumptions)
+5. [Edge Case Adjustments](#5-edge-case-adjustments)
+6. [Improvements for Downstream Users](#6-improvements-for-downstream-users)
+7. [Sample Datasets and Joins](#7-sample-datasets-and-joins)
+
+---
 
 ## 1. Business case background
 
@@ -16,13 +18,18 @@ This section sets main assumptions of the business context. This serves as the b
 - business logic for cross-table interactions
 
 **The Business Flow:**
-    1.  **Sector & Equities Monitoring:** Ingesting strict reference data across different sectors (`Security`, `Security_Name`) to define the tradable universe point-in-time.
-    2.  **Signal Generation:** Researchers/ analysts query `Security_Price` and `Option_Price` to backtest or extract signals for their specific strategies.
-    3.  **Trade Planning & Risk Sensitivity:** Constructing portfolios using `Zero_Curve` and `Forward_Price` to model fair value and sensitivity to changes in pricing.
-    4.  **Position Tracking:** Re-weighting portfolios based on `Distribution` records and correctly tracking exact `Total Return`.
+
+1.  **Sector & Equities Monitoring:** Ingesting strict reference data across different sectors (`Security`, `Security_Name`) to define the tradable universe point-in-time.
+
+2.  **Signal Generation:** Researchers/ analysts query `Security_Price` and `Option_Price` to backtest or extract signals for their specific strategies.
+
+3.  **Trade Planning & Risk Sensitivity:** Constructing portfolios using `Zero_Curve` and `Forward_Price` to model fair value and sensitivity to changes in pricing.
+
+4.  **Position Tracking:** Re-weighting portfolios based on `Distribution` records and correctly tracking exact `Total Return`.
 
 This flow was a combination of information from:
 - Bridgewater's own investment thesis and positioning as a "systematic and macro fund". Including the "Investment Engine" which codifies macroeconomic cause-effect signals into a set of rules to execute upon.
+
 - Online research of the components of a trading system. 
 	- Idea generation 
 	- -> backtesting 
@@ -44,14 +51,14 @@ This sections explains:
 - logical DB relations between tables
 
 ### Data Dictionary
-See [`data_dictionary.md`](data_dictionary.md) for explicit table grains, types, and column explanations.
+See [`data_dictionary.md`](appendix/data_dictionary.md) for explicit table grains, types, and column explanations.
 
 ### Schema Diagram
 Full schema with sample data can be explored at: [data-model-20260503 - dbdocs.io](https://dbdocs.io/oliverqsw/data-model-20260503?schema=public&view=relationships&table=Security).
 
 Documented via [`schema.dbml`](./schema.dbml) and created using https://dbdiagram.io
 
-![[schema_image.png]]
+![Schema Diagram](references/schema_image.png)
 ## 3. Major model decisions
 
 This section documents how and why the original model was improved to support expected data types, scaling, history handling, and prevent time-travel bias.
@@ -68,11 +75,16 @@ System time is also the timestamp which a specific event was made available to t
 **Issue**
 When a revision is made to an event, our data model must differentiate between the 2 timelines. 
 
-For example a surprise dividend was announced on 01 May but was only made available to the system on 03 May due to various delays. 
+![alt text](./references/bitemporal.png)
 
-If the trading system then ran a backtest on 03 May without consideration of System Time, it would see that price jumps on 02 May were correlated to the 01 May dividend announcement. This is looking at **future data** it would not have had on 02 May.
+For example: a surprise dividend was announced on T-2 but was only made available to the system on T due to various delays. 
 
-The correct method is for the trading system to ignore any data that was not available before 02 May, which would exclude the surprise announcement.
+If the trading system then ran a backtest on 03 May without consideration of System Time, 
+
+- It would see that price jumps on T-1 were correlated to the T-2 dividend announcement. 
+- This is looking at **future data** it would not have had on T.
+
+The correct method is for the trading system to ignore any data that was not available before T-1, which would exclude the surprise announcement.
 
 **Implementation**
 Bi-temporality is implemented in the data model via:
@@ -83,8 +95,10 @@ Bi-temporality is implemented in the data model via:
 - Time-sensitive queries require `System_Time` to be qualified to the relevant time range. 
 - Non-time sensitive queries require deduplication to the latest available data per table grain.
 
-Example of a typical "walk-forward" backtest across multiple days of data for a given security:
+
 ```sql
+-- Example: a typical "walk-forward" backtest across multiple days of data for a given security
+
 SELECT 
 FROM
 ...
@@ -108,9 +122,10 @@ QUALIFY ROW_NUMBER()
 This is specific to `Option_Price` and `Option_Contract` tables.
 
 **Issue**
--  `Option_Price` expected to contain on the order of 10^9 rows. 
+-  `Option_Price` expected to contain ~ 6 billion rows.
 - Immutable characteristics (`Security_ID`, `Symbol`,`Strike`, `ContractSize`, `Expiration`) are duplicated across rows for the same `Option_ID`
 - String columns take up more space than the daily value `numeric` columns
+- Any queries that need unique `Option_Contract` characteristics but not daily prices will have to do expensive `GROUP BY` or `DISTINCT` operations on whole table every query.
 
 **Implementation**
 - Immutable characteristics are normalized into `Option_Contract` table
@@ -145,11 +160,11 @@ We assume roughly 250 trading days per year over a **25-year horizon**.
 ### B. Incoming Data Reliability
 **Justification:** Data vendors may issue data that is false, missing, revised, or late-arriving. This can be due to technical faults, or real-world business actions.
 
-**Mitigation:**  **Bitemporal `System_Time` Model. 
+**Mitigation:** Bitemporal `System_Time` Model. 
 
 Do not execute `UPDATE` or `DELETE` operations on historical data. If a vendor sends a correction for `Date = T-3`, it is `INSERT`ed as a new row with today’s `System_Time  = T`. 
 
-For querying, we incur cost of complex queries for historical data integrity. Examples of this can be found in [[edge_cases]].
+For querying, we incur cost of complex queries for historical data integrity. Examples of this can be found in [`edge_cases.md`](appendix/edge_cases.md).
 
 
 ### C. Multiple Data Sources
@@ -161,20 +176,14 @@ For querying, we incur cost of complex queries for historical data integrity. Ex
 
 **Mitigation:** Logical Grain (business `Date`) is separated from the Physical Grain (`System_Time`), the data model does not care how the data arrives. Upstream ELT pipelines perform required normalization and data checks before pushing into the dataset with a single `System_Time`.
 
-## 5. Adjusting for Various Cases
+## 5. Edge Case Adjustments
 
 This section covers possible downstream query scenarios and the required `JOIN` and `WHERE` qualifiers for handling them.
 
-See [[edge_cases]] document.
+See [`edge_cases.md`](appendix/edge_cases.md) document.
 
 
-## 6. Sample Datasets and Joins
-
-A simple mock database was populated to allow for testing queries. 
-
-- **Database file**: `mock_universe.db`
-- **Database init script**: `build_mock_db.py` -- consider taking this one out?
-- **Sample queries:** [`sample_queries.sql`](./sample_queries.sql)
+## 6. Improvements for Downstream Users
 
 ### Suggested index strategy
 
@@ -186,11 +195,13 @@ While composite PKs are automatically indexed, it would be efficient to also ind
 | **Cross table joins using FKs.**           | `Option_Contract(Security_ID)`<br>`Distribution(Link_Security_ID)`                    | Since the option contract information is normalized from their contract prices, frequent joins without a FK index would cause full table scans. <br><br>A query like *"get all Meta/ Facebook options and corporate actions since IPO"*, would require these indexes to be efficient. |
 | **Date filters for time-series analysis.** | `Security_Price(Date)`<br>`Option_Price(Date)`                                        | Ordering/ filtering across multiple dates on all pricing would bypass the composite PK index which starts with `Security_ID` or `Option_ID`.<br><br>We would need secondary indexing on the `Date` columns alone.                                                                     |
 
-This assumes that the data is stored in standard row-based databases, but the same logic applies to columnar warehouses (Snowflake, BigQuery, Clickhouse, etc.)
+This assumes that the data is stored in standard row-based databases where individual columns need their own index on top of the PK composite index, but the same logic applies to columnar warehouses (Snowflake, BigQuery, Clickhouse, etc.)
 
 ### Suggested supporting tables/ views
 
-Downstream BI reporting tools and non-technical analysts typically only need the latest valid and available data. These views reduce the need for downstream users to write additional `JOIN` to handle bi-temporal source tables.
+- Downstream BI reporting tools and non-technical analysts typically only need the latest valid and available data. 
+- These views reduce the need for downstream users to write additional `JOIN` to handle bi-temporal source tables. 
+- Views will be materialized (daily) to avoid dynamically recomputing them on every query.
 
 #### ref_dim_date
 **Purpose:** Centralized trading calendar table for US markets. Maintained for consistent analytics as most queries rely on running experiments only on market open days.
@@ -206,14 +217,14 @@ Why doesn't this have a `System_Time` column to handle when trading calendar cha
 - **Cost**: Adding `System_Time` would add additional QUALIFY computations on every downstream query that requires a date. 
 - **Low risk**: It is extremely rare for US trading calendar to be unexpectedly changed other than national disasters or conflicts. 
 
-#### vw_security_current (The Ergonomic Baseline) - [VIEW]
+#### vw_security_current
 **Function:** Merges the latest ticker info per `Security`, accounting for any ticker updates and revisions.
 
 **Value:** Serves as the basis for all other `JOIN`s into tables via `Security_ID` key. Having the latest `Ticker` available reduces the need for analyst to write the initial `JOIN` between `Security <> Security_Name`
 
 **SQL Definition:**
 ```sql
-CREATE VIEW VW_Security_Current AS
+CREATE VIEW vw_security_current AS
 SELECT 
     s.Security_ID, 
     -- Use the latest updated information for each security
@@ -238,14 +249,16 @@ JOIN (
 | :---------- | :----- | :------- | :----------------- | :----------------- |
 | `10001001`  | `TSLA` | `037833` | `TESLA INC`        | `2022-01-01 16:30` |
 | `10002002`  | `META` | `303030` | `META PLATFORMS`   | `2022-06-09 16:30` |
-#### vw_latest_option_price / vw_latest_security_price - [VIEW]
+
+
+#### vw_latest_option_price / vw_latest_security_price
 **Function:** Centralizes the maintenance and ownership of fresh data to the DE team, while maintaining ability to have bitemporal source tables.
 
 **Value:** Prevents different analyst teams from writing custom window functions to select the latest revisions per business grain. 
 
 **SQL Definition:**
 ```sql
-CREATE VIEW VW_latest_option_price AS
+CREATE VIEW vw_latest_option_price AS
 SELECT *
 FROM Option_Price
 QUALIFY ROW_NUMBER() OVER(
@@ -253,7 +266,7 @@ QUALIFY ROW_NUMBER() OVER(
     ORDER BY System_Time DESC
 ) = 1;
 ```
-#### vw_split_adjusted_security_price - [VIEW]
+#### vw_split_adjusted_security_price
 **Function:** Computes `Security_Price.Close_Price` with latest `Security_Price.Adjustment_Factor`.
 
 **Value:** Non-adjusted values in source tables are complex to query and recompute in charting systems. 
@@ -262,7 +275,7 @@ This view physically computes `Close / Adjustment_Factor` dynamically so analyst
 
 **SQL Definition:**
 ```sql
-CREATE VIEW VW_Split_Adjusted_History AS
+CREATE VIEW vw_split_adjusted_security_price AS
 SELECT 
     Security_ID,
     Date,
@@ -282,3 +295,11 @@ QUALIFY ROW_NUMBER() OVER(
 | :---------- | :----------- | :------------- | :-------------- |
 | `10001001`  | `2022-08-24` | `297.09`       | `3000000`       |
 | `10001001`  | `2022-08-25` | `297.10`       | `3000000`       |
+
+## 7. Sample Datasets and Joins
+
+A simple mock database was populated to allow for testing queries. 
+
+- **Database file**: [`data/mock_dataset.db`](data/mock_dataset.db)
+- **Database init script**: [`data/build_mock_db.py`](data/build_mock_db.py)
+- **Sample queries:** [`sample_queries.sql`](appendix/sample_queries.sql)

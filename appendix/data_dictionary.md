@@ -4,16 +4,16 @@
 - All tables have explicit `System_Time` (row-append time) to allow queries without Look-Ahead Bias. This applies to all data, regardless of whether it is mutable in reality.
 - All system timestamps are assumed to be UTC for global consistency.
 - All datestamps (business event time) are assumed to be UTC-5 (Eastern Time) for consistency with U.S. markets.
-- For SCD2 DIM tables, we do not add a `valid_to_date` column to maintain append-only consistency. Validity is handled by checking both `date` (i.e. valid time) and `System_Time` (i.e. transaction time) meet the point-in-time criteria.
+- For SCD2 DIM tables, we do not add a `valid_to_date` column to maintain append-only consistency. Validity is handled by checking both `date` (i.e. valid time) and `System_Time` (i.e. database update time) meet the point-in-time criteria.
 - Minor assumptions and changes covered per table.
 
 ---
 
 ## 1. Security
-**Purpose:** Reference table for each underlying security.
-**Type:** DIM
-**Logical Grain:** `Security_ID`
-**Physical PK:** `Security_ID + System_Time`
+- **Purpose:** Reference table for each underlying security.
+- **Type:** DIM
+- **Logical Grain:** `Security_ID`
+- **Physical PK:** `Security_ID + System_Time`
 
 | Column          | Type        | Description                             | Example               | Notes                                                                                                                                                                                                                                                |
 | :-------------- | :---------- | :-------------------------------------- | :-------------------- | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -31,10 +31,10 @@
 ---
 
 ## 2. Security_Name
-**Purpose:** Historical record of changes to the security's identifying details.
-**Type:** DIM (SCD2)
-**Logical Grain:** `Security_ID + Date`
-**Physical PK:** `Security_ID + Date + System_Time`
+- **Purpose:** Historical record of changes to the security's identifying details.
+- **Type:** DIM (SCD2)
+- **Logical Grain:** `Security_ID + Date`
+- **Physical PK:** `Security_ID + Date + System_Time`
 
 | Column             | Type        | Description                       | Example               | Notes                                                   |
 | :----------------- | :---------- | :-------------------------------- | :-------------------- | :------------------------------------------------------ |
@@ -51,10 +51,10 @@
 ---
 
 ## 3. Exchange
-**Purpose:** Historical record of listing, delisting, and exchange changes.
-**Type:** FACT
-**Logical Grain:** `Security_ID + Date + Sequence`
-**Physical PK:** `Security_ID + Date + Sequence + System_Time`
+- **Purpose:** Historical record of listing, delisting, and exchange changes.
+- **Type:** FACT
+- **Logical Grain:** `Security_ID + Date + Sequence`
+- **Physical PK:** `Security_ID + Date + Sequence + System_Time`
 
 | Column               | Type        | Description                               | Example               | Notes                                                                         |
 | :------------------- | :---------- | :---------------------------------------- | :-------------------- | :---------------------------------------------------------------------------- |
@@ -70,10 +70,10 @@
 ---
 
 ## 4. Distribution
-**Purpose:** Corporate-action and distribution history for the security.
-**Type:** FACT
-**Logical Grain:** `Security ID + Record_Date + Sequence`
-**Physical PK:** `Security ID + Record_Date + Sequence + System_Time`
+- **Purpose:** Corporate-action and distribution history for the security.
+- **Type:** FACT
+- **Logical Grain:** `Security ID + Record_Date + Sequence`
+- **Physical PK:** `Security ID + Record_Date + Sequence + System_Time`
 
 | Column              | Type        | Description                           | Example            | Notes                                                                      |
 | :------------------ | :---------- | :------------------------------------ | :----------------- | :------------------------------------------------------------------------- |
@@ -97,10 +97,10 @@
 ---
 
 ## 5. Security_Price
-**Purpose:** Daily price history for the underlying security.
-**Type:** FACT
-**Logical Grain:** `Security ID + Date`
-**Physical PK:** `Security ID + Date + System_Time`
+- **Purpose:** Daily price history for the underlying security.
+- **Type:** FACT
+- **Logical Grain:** `Security ID + Date`
+- **Physical PK:** `Security ID + Date + System_Time`
 
 | Column             | Type        | Description                                        | Example            | Notes                                                                                                                |
 | :----------------- | :---------- | :------------------------------------------------- | :----------------- | :------------------------------------------------------------------------------------------------------------------- |
@@ -120,10 +120,10 @@
 ---
 
 ## 6. Option_Info
-**Purpose:** Option conventions recorded at the underlying-security level.
-**Type:** DIM
-**Logical Grain:** `Security ID`
-**Physical PK:** `Security ID + System_Time`
+- **Purpose:** Option conventions recorded at the underlying-security level.
+- **Type:** DIM
+- **Logical Grain:** `Security ID`
+- **Physical PK:** `Security ID + System_Time`
 
 **Note**: A better name for this table would be `Security_OptionInfo`
 
@@ -137,10 +137,10 @@
 ---
 
 ## 7. Option_Contract [new]
-**Purpose:**  Normalized table for per contract characteristics.
-**Type:** DIM
-**Logical Grain:** `Option ID`
-**Physical PK:** `Option ID + System_Time`
+- **Purpose:** Normalized table for per contract characteristics.
+- **Type:** DIM
+- **Logical Grain:** `Option ID`
+- **Physical PK:** `Option ID + System_Time`
 
 **Note:** In some cases, the Options Clearing Council (OCC) may deprecate an old option symbol (`AAPL --> AAPL1`) which is treated as a new Option ID.  See [reference](https://www.webull.com/help/faq/10831-Corporate-Actions-and-Non-Standard-Options) explanation.
 
@@ -163,10 +163,10 @@ The fields in this table are expected to be constant for each Option ID and henc
 ---
 
 ## 8. Option_Price
-**Purpose:** Pure Fact table strictly daily contract pricing and Greeks.
-**Type:** FACT
-**Logical Grain:** `option_id + date`
-**Physical PK:** `option_id + date + System_Time`
+- **Purpose:** Pure Fact table strictly daily contract pricing and Greeks.
+- **Type:** FACT
+- **Logical Grain:** `option_id + date`
+- **Physical PK:** `option_id + date + System_Time`
 
 **Note:** There is no closing price, but can be assumed to be computed as `(Best_Bid + Best_Offer) / 2`
 
@@ -192,10 +192,10 @@ The fields in this table are expected to be constant for each Option ID and henc
 ---
 
 ## 9. Forward_Price
-**Purpose:** Expected forward price by underlying and expiration. Used as inputs for calculation of other fields.
-**Type:** FACT
-**Logical Grain:** `Security ID + Date + Expiration
-**Physical PK:** `Security ID + Date + Expiration + System_Time`
+- **Purpose:** Expected forward price by underlying and expiration. Used as inputs for calculation of other fields.
+- **Type:** FACT
+- **Logical Grain:** `Security ID + Date + Expiration`
+- **Physical PK:** `Security ID + Date + Expiration + System_Time`
 
 | Column          | Type        | Description                     | Example      | Notes |
 | :-------------- | :---------- | :------------------------------ | :----------- | :---- |
@@ -203,15 +203,15 @@ The fields in this table are expected to be constant for each Option ID and henc
 | **Date**        | `date`      | Date of the record.             | `2023-08-11` |       |
 | **Expiration**  | `date`      | Option expiration date.         | `2023-08-18` |       |
 | Forward Price   | `numeric`   | Expected underlying baseline.   | `177.85`     |       |
-| **System_Time** | `timestamp` | UTC time for record append      | `2023-08-11` |       |
+| **System_Time** | `timestamp` | UTC time for record append      | `2023-08-11 16:30` |       |
 
 ---
 
 ## 10. Zero_Curve
-**Purpose:** Pure interest-rate cost-of-capital extraction mapping globally across the framework.
-**Type:** REFERENCE (FACT)
-**Logical Grain:** `Date + Days`
-**Physical PK:** `Date + Days + System_Time`
+- **Purpose:** Pure interest-rate cost-of-capital extraction mapping globally across the framework.
+- **Type:** REFERENCE (FACT)
+- **Logical Grain:** `Date + Days`
+- **Physical PK:** `Date + Days + System_Time`
 
 | Column          | Type        | Description                     | Example            | Notes                                                          |
 | :-------------- | :---------- | :------------------------------ | :----------------- | :------------------------------------------------------------- |
