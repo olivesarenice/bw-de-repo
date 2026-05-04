@@ -13,12 +13,13 @@ Table Security {
   Class varchar [note: "Security class designator, if any."]
   Issue_Type varchar [note: "Type of security (e.g., CS, ETF, ADR)."]
   Industry_Group varchar [note: "3-digit Morningstar industry-group classification. Stored as string to survive taxonomy changes."]
+  System_Time timestamp [pk, note: "Bitemporal audit column."]
 
   Records {
-    10001001, '03783310', 'TSLA', '3571', false, 'Q', 'A', 'CS', '311'
-    10002002, '30303030', 'META', '7370', false, 'Q', 'A', 'CS', '311'
-    10003003, '11111111', 'ACQ',  '1111', false, 'Q', 'A', 'CS', '311'
-    10004004, '22222222', 'BUY',  '1111', false, 'Q', 'A', 'CS', '311'
+    10001001, '03783310', 'TSLA', '3571', false, 'Q', 'A', 'CS', '311', '2010-06-29 00:00:00'
+    10002002, '30303030', 'META', '7370', false, 'Q', 'A', 'CS', '311', '2012-05-18 00:00:00'
+    10003003, '11111111', 'ACQ',  '1111', false, 'Q', 'A', 'CS', '311', '2023-01-01 00:00:00'
+    10004004, '22222222', 'BUY',  '1111', false, 'Q', 'A', 'CS', '311', '2023-01-01 00:00:00'
   }
 }
 

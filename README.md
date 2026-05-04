@@ -58,7 +58,7 @@ Full schema with sample data can be explored at: [data-model-20260503 - dbdocs.i
 
 Documented via [`schema.dbml`](./schema.dbml) and created using https://dbdiagram.io
 
-![Schema Diagram](references/schema_image.png)
+![Schema Diagram](references/data-model-20260503.png)
 ## 3. Major model decisions
 
 This section documents how and why the original model was improved to support expected data types, scaling, history handling, and prevent time-travel bias.
